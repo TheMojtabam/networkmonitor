@@ -1,8 +1,10 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"flag"
+	"io/fs"
 	"log"
 	"net/http"
 	"time"
@@ -12,6 +14,9 @@ import (
 )
 
 type envelope map[string]any
+
+//go:embed web/*
+var webFS embed.FS
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -30,6 +35,25 @@ func main() {
 	flag.Parse()
 
 	mux := http.NewServeMux()
+
+	// Serve embedded frontend (SPA)
+	if sub, err := fs.Sub(webFS, "web"); err == nil {
+		fsHandler := http.FileServer(http.FS(sub))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// Let API routes pass
+			if len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
+				http.NotFound(w, r)
+				return
+			}
+			// SPA fallback to index.html
+			if r.URL.Path != "/" {
+				if _, err := fs.Stat(sub, r.URL.Path[1:]); err != nil {
+					r.URL.Path = "/"
+				}
+			}
+			fsHandler.ServeHTTP(w, r)
+		})
+	}
 
 	// Health check
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
