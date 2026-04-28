@@ -33,11 +33,11 @@ export default function App() {
       try {
         setErr(null)
         const [a, b] = await Promise.all([
-          apiGet<NetInterface[]>('/api/net/interfaces'),
-          apiGet<NetPort[]>('/api/net/ports'),
+          apiGet<{ interfaces: NetInterface[] }>('/api/net/interfaces'),
+          apiGet<{ ports: NetPort[] }>('/api/net/ports'),
         ])
-        setIfs(a)
-        setPorts(b)
+        setIfs(a.interfaces ?? [])
+        setPorts(b.ports ?? [])
       } catch (e: any) {
         setErr(e?.message ?? String(e))
       }
