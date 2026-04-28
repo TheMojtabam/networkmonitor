@@ -33,11 +33,33 @@ export default function App() {
       try {
         setErr(null)
         const [a, b] = await Promise.all([
-          apiGet<{ interfaces: NetInterface[] }>('/api/net/interfaces'),
-          apiGet<{ ports: NetPort[] }>('/api/net/ports'),
+          apiGet<{ interfaces: any[]; rates?: any[] }>('/api/net/interfaces'),
+          apiGet<{ ports: any[] }>('/api/net/ports'),
         ])
-        setIfs(a.interfaces ?? [])
-        setPorts(b.ports ?? [])
+        // Backend returns {interfaces:[...], rates:[...]} where rates items carry bytes/sec.
+        // Merge by interface name.
+        const rateMap = new Map<string, any>()
+        ;(a.rates ?? []).forEach((r) => rateMap.set(r.name, r))
+        const merged = (a.interfaces ?? []).map((x) => {
+          const r = rateMap.get(x.name) || {}
+          return {
+            name: x.name,
+            rxBytes: x.rxBytes,
+            txBytes: x.txBytes,
+            rxBps: r.rxBytesPerSec ?? 0,
+            txBps: r.txBytesPerSec ?? 0,
+          } as NetInterface
+        })
+        setIfs(merged)
+        setPorts(
+          (b.ports ?? []).map((p) => ({
+            proto: p.protocol,
+            localAddr: p.localAddr,
+            localPort: p.localPort,
+            state: String(p.state),
+            connections: p.connectionCount ?? 0,
+          }))
+        )
       } catch (e: any) {
         setErr(e?.message ?? String(e))
       }
