@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mojtaba/portsleuth/backend/internal/netstat"
+	"github.com/mojtaba/portsleuth/backend/internal/portbytes"
 	"github.com/mojtaba/portsleuth/backend/internal/sysinfo"
 )
 
@@ -118,28 +119,28 @@ func main() {
 		})
 	})
 
-	// Per-port bytes (eBPF or nftables)
-	// NOTE: This requires elevated privileges and setup
+	// Per-port bytes (eBPF)
 	mux.HandleFunc("/api/net/port-bytes", func(w http.ResponseWriter, r *http.Request) {
-		collector, err := netstat.NewPortBytesCollector()
+		iface := r.URL.Query().Get("iface")
+		if iface == "" {
+			iface = "eth0"
+		}
+		limit := 50
+		c, err := portbytes.New(iface)
 		if err != nil {
-			writeJSON(w, 500, envelope{
+			writeJSON(w, 501, envelope{
 				"error":   err.Error(),
-				"message": "Per-port byte accounting requires eBPF or nftables setup. See documentation.",
+				"message": "per-port bytes needs eBPF + CAP_NET_ADMIN/CAP_BPF. Try running as root and ensure clang/llvm + bpf2go-generated objects are built.",
 			})
 			return
 		}
-		defer collector.Close()
-
-		portBytes, err := collector.Collect()
+		defer c.Close()
+		rows, err := c.CollectTop(limit)
 		if err != nil {
 			writeJSON(w, 500, envelope{"error": err.Error()})
 			return
 		}
-
-		writeJSON(w, 200, envelope{
-			"portBytes": portBytes,
-		})
+		writeJSON(w, 200, envelope{"iface": iface, "top": rows})
 	})
 
 	// SS fallback (alternative port listing using 'ss' command)
