@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# PortSleuth installer
-# One-liner usage:
-#   curl -fsSL https://raw.githubusercontent.com/TheMojtabam/networkmonitor/main/install/install.sh | sudo bash -s install
-#   curl -fsSL https://raw.githubusercontent.com/TheMojtabam/networkmonitor/main/install/install.sh | sudo bash -s update
-#   curl -fsSL https://raw.githubusercontent.com/TheMojtabam/networkmonitor/main/install/install.sh | sudo bash -s uninstall
-
 REPO="TheMojtabam/networkmonitor"
 APP="portsleuth"
 USER="portsleuth"
@@ -18,6 +12,10 @@ PORT=${PORTSLEUTH_PORT:-1234}
 
 usage(){ echo "Usage: $0 {install|update|uninstall}"; }
 need_root(){ [[ ${EUID} -eq 0 ]] || { echo "Run as root" >&2; exit 1; }; }
+
+has_systemd(){
+  command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1
+}
 
 ensure_user(){
   if ! id -u "$USER" >/dev/null 2>&1; then
@@ -54,7 +52,7 @@ download_release(){
   arch_=$(arch)
   tag=$(latest_tag)
   if [[ -z "$tag" ]]; then
-    echo "No GitHub releases found for ${REPO}. Create a release first." >&2
+    echo "No GitHub releases found for ${REPO}." >&2
     exit 2
   fi
 
@@ -67,7 +65,7 @@ download_release(){
 }
 
 install_unit(){
-  cat > "$SERVICE" <<EOF
+  cat > "$SERVICE" <<EOFUNIT
 [Unit]
 Description=PortSleuth (network & system monitoring)
 After=network-online.target
@@ -83,17 +81,36 @@ ExecStart=$BIN_DIR/portsleuthd --listen :$PORT
 Restart=always
 RestartSec=2
 
-# For eBPF mode (when implemented) these capabilities matter:
 AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
 NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOFUNIT
 
   systemctl daemon-reload
   systemctl enable --now portsleuth.service
+}
+
+start_no_systemd(){
+  mkdir -p "$INSTALL_DIR/run" "$INSTALL_DIR/log"
+  local pidfile="$INSTALL_DIR/run/portsleuth.pid"
+  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "Already running (pid $(cat "$pidfile"))." >&2
+    return 0
+  fi
+  nohup "$BIN_DIR/portsleuthd" --listen ":$PORT" >"$INSTALL_DIR/log/portsleuth.log" 2>&1 &
+  echo $! > "$pidfile"
+  echo "Started (no systemd). pid=$(cat "$pidfile")" >&2
+}
+
+stop_no_systemd(){
+  local pidfile="$INSTALL_DIR/run/portsleuth.pid"
+  if [[ -f "$pidfile" ]]; then
+    kill "$(cat "$pidfile")" 2>/dev/null || true
+    rm -f "$pidfile"
+  fi
 }
 
 cmd_install(){
@@ -103,23 +120,39 @@ cmd_install(){
   chown -R "$USER:$GROUP" "$INSTALL_DIR"
 
   download_release
-  install_unit
-  echo "Installed. Open: http://<SERVER_IP>:${PORT}/" >&2
+  if has_systemd; then
+    install_unit
+  else
+    start_no_systemd
+  fi
+  echo "Open: http://<SERVER_IP>:${PORT}/api/health" >&2
 }
 
 cmd_update(){
   need_root
-  systemctl stop portsleuth.service || true
+  if has_systemd; then
+    systemctl stop portsleuth.service || true
+  else
+    stop_no_systemd
+  fi
   download_release
-  systemctl start portsleuth.service || true
+  if has_systemd; then
+    systemctl start portsleuth.service || true
+  else
+    start_no_systemd
+  fi
   echo "Updated." >&2
 }
 
 cmd_uninstall(){
   need_root
-  systemctl disable --now portsleuth.service || true
-  rm -f "$SERVICE"
-  systemctl daemon-reload || true
+  if has_systemd; then
+    systemctl disable --now portsleuth.service || true
+    rm -f "$SERVICE"
+    systemctl daemon-reload || true
+  else
+    stop_no_systemd
+  fi
   rm -f "$BIN_DIR/portsleuthd" || true
   rm -rf "$INSTALL_DIR" || true
   userdel "$USER" 2>/dev/null || true
