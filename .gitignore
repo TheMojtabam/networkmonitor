@@ -1,0 +1,27 @@
+# --- Backend ---
+/bin/
+*.test
+*.out
+backend/internal/collector/ebpf/portcounter_bpf*.go
+backend/internal/collector/ebpf/portcounter_bpf*.o
+
+# --- Frontend ---
+node_modules/
+frontend/dist/
+backend/cmd/portsleuthd/web/assets/
+backend/cmd/portsleuthd/web/index.html
+backend/cmd/portsleuthd/web/favicon.svg
+
+# --- Editor / OS ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Local config / secrets ---
+config.local.yaml
+*.token
+.env
+.env.local
+*.tsbuildinfo

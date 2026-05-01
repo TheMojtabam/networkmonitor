@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular nums for all monospace numeric content */
+  .font-mono, code, pre, kbd, samp, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Custom scrollbar — subtle, dark-theme native */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.border.DEFAULT');
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.border.strong');
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid theme('colors.accent.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Inputs/selects share these defaults — actual styling lives in components */
+  button, input, select, textarea {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Sparkline path — useful inside SVGs */
+  .stroke-rx { stroke: theme('colors.rx'); }
+  .stroke-tx { stroke: theme('colors.tx'); }
+  .fill-rx { fill: theme('colors.rx'); }
+  .fill-tx { fill: theme('colors.tx'); }
+
+  /* Animated underline used on nav active state */
+  .nav-active {
+    position: relative;
+  }
+  .nav-active::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    background: theme('colors.accent.bg');
+    border: 1px solid theme('colors.accent.border');
+  }
+}
